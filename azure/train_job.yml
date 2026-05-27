@@ -1,0 +1,58 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandJob.schema.json
+
+# -----------------------------------------------------------------------
+# Azure ML CommandJob — Wine Quality Classifier Training
+# Referenced by: .github/workflows/ci-cd-pipeline.yml
+# -----------------------------------------------------------------------
+type: command
+
+experiment_name: wine-quality-experiment
+display_name: wine-quality-training-job
+description: >
+  Trains a RandomForest pipeline on the UCI Wine Quality (red) dataset,
+  logs metrics and artefacts to MLflow, then writes the serialised model
+  to the configured output path for downstream registration.
+
+# ---- Compute -----------------------------------------------------------
+compute: azureml:wine-quality-cluster
+
+resources:
+  instance_type: Standard_DS3_v2
+  instance_count: 1
+
+# ---- Environment -------------------------------------------------------
+environment: azureml:wine-quality-env@latest
+
+# ---- Inputs ------------------------------------------------------------
+inputs:
+  wine_data:
+    type: uri_file
+    path: azureml:wine-quality-dataset@latest
+    mode: ro_mount
+
+# ---- Outputs -----------------------------------------------------------
+outputs:
+  model_output:
+    type: uri_folder
+    mode: rw_mount
+
+# ---- Command -----------------------------------------------------------
+command: >
+  python src/train.py
+  --data-path ${{inputs.wine_data}}
+  --model-output ${{outputs.model_output}}
+  --registered-model-name wine-quality-classifier
+
+# ---- Environment Variables ---------------------------------------------
+environment_variables:
+  GIT_SHA: ${{name}}
+  RUN_ID: ${{name}}
+  MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING: "true"
+
+# ---- Traceability Tags -------------------------------------------------
+tags:
+  project: wine-quality-classifier
+  framework: scikit-learn
+  dataset: uci-wine-quality-red
+  managed_by: github-actions
+  pipeline_version: "1.0"

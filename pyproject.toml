@@ -1,0 +1,45 @@
+# =======================================================================
+# pyproject.toml — Tool configuration for Wine Quality Classifier project
+# =======================================================================
+
+[tool.black]
+line-length = 100
+target-version = ["py39"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    \.git
+  | \.venv
+  | __pycache__
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["utils"]
+src_paths = ["src", "scripts", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=xml:coverage.xml",
+    "--cov-fail-under=50",
+    "-v",
+    "--tb=short",
+]
+log_cli = true
+log_cli_level = "INFO"
+log_format = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+[tool.bandit]
+targets = ["src", "scripts"]
+skips = ["B101"]   # assert statements are fine in test-facing code

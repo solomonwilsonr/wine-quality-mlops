@@ -1,0 +1,422 @@
+# CI/CD Pipeline for Wine Quality ML Model
+# Triggers on push to main and pull requests targeting main.
+# Uses OIDC (federated identity) for Azure authentication — no long-lived secrets.
+
+name: ML CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Prevent concurrent runs on the same ref to avoid race conditions in Azure ML.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.9"
+  AML_WORKSPACE: ${{ secrets.AZURE_ML_WORKSPACE }}
+  AML_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+  AML_SUBSCRIPTION: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  STAGING_ENDPOINT: wine-quality-staging
+  PROD_ENDPOINT: wine-quality-prod
+  MODEL_NAME: wine-quality-classifier
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: Lint, unit tests, and coverage
+  # ---------------------------------------------------------------------------
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          pip install -e .
+
+      - name: Run flake8
+        run: |
+          flake8 src/ tests/ \
+            --max-line-length=120 \
+            --exclude=__pycache__ \
+            --statistics
+
+      - name: Run black (check only)
+        run: black --check --diff src/ tests/
+
+      - name: Run isort (check only)
+        run: isort --check-only --diff src/ tests/
+
+      - name: Run pytest with coverage
+        run: |
+          pytest tests/ \
+            --cov=src \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term-missing \
+            --cov-fail-under=50 \
+            -v
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          flags: unittests
+          fail_ci_if_error: false
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Train model on Azure ML and register if metrics improve
+  # ---------------------------------------------------------------------------
+  train-and-register:
+    name: Train & Register Model
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      id-token: write   # Required for OIDC
+      contents: read
+
+    outputs:
+      model_version: ${{ steps.register.outputs.model_version }}
+      should_deploy: ${{ steps.evaluate.outputs.should_deploy }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install Azure ML SDK
+        run: |
+          pip install --upgrade pip
+          pip install azure-ai-ml azure-identity mlflow azureml-mlflow
+
+      - name: Submit Azure ML training job
+        id: train
+        run: |
+          az ml job create \
+            --file azure/train_job.yml \
+            --workspace-name ${{ env.AML_WORKSPACE }} \
+            --resource-group ${{ env.AML_RESOURCE_GROUP }} \
+            --subscription ${{ env.AML_SUBSCRIPTION }} \
+            --set environment_variables.GIT_SHA=${{ github.sha }} \
+            --set environment_variables.RUN_ID=${{ github.run_id }} \
+            --stream \
+          | tee train_output.txt
+          JOB_NAME=$(grep -oP '(?<="name": ")[^"]+' train_output.txt | head -1)
+          echo "job_name=$JOB_NAME" >> $GITHUB_OUTPUT
+
+      - name: Download training metrics
+        run: |
+          az ml job download \
+            --name ${{ steps.train.outputs.job_name }} \
+            --output-name model_metrics \
+            --download-path ./outputs \
+            --workspace-name ${{ env.AML_WORKSPACE }} \
+            --resource-group ${{ env.AML_RESOURCE_GROUP }}
+
+      - name: Evaluate model against champion
+        id: evaluate
+        run: |
+          python src/evaluate.py \
+            --metrics-path ./outputs/model_metrics/metrics.json \
+            --model-name ${{ env.MODEL_NAME }} \
+            --workspace ${{ env.AML_WORKSPACE }} \
+            --resource-group ${{ env.AML_RESOURCE_GROUP }} \
+            --subscription ${{ env.AML_SUBSCRIPTION }}
+          echo "should_deploy=$?" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Register model in Azure ML
+        id: register
+        if: steps.evaluate.outputs.should_deploy == '0'
+        run: |
+          python scripts/register_model.py \
+            --job-name ${{ steps.train.outputs.job_name }} \
+            --model-name ${{ env.MODEL_NAME }} \
+            --git-sha ${{ github.sha }} \
+            --workspace ${{ env.AML_WORKSPACE }} \
+            --resource-group ${{ env.AML_RESOURCE_GROUP }} \
+            --subscription ${{ env.AML_SUBSCRIPTION }} \
+          | tee register_output.txt
+          VERSION=$(grep -oP '(?<=Model version: )\d+' register_output.txt)
+          echo "model_version=$VERSION" >> $GITHUB_OUTPUT
+
+  # ---------------------------------------------------------------------------
+  # Job 3: Deploy to staging endpoint
+  # ---------------------------------------------------------------------------
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: train-and-register
+    if: needs.train-and-register.outputs.should_deploy == '0'
+    environment: staging
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Create or update staging endpoint
+        run: |
+          az ml online-endpoint create \
+            --file azure/endpoint.yml \
+            --name ${{ env.STAGING_ENDPOINT }} \
+            --workspace-name ${{ env.AML_WORKSPACE }} \
+            --resource-group ${{ env.AML_RESOURCE_GROUP }} \
+            --no-wait || \
+          az ml online-endpoint update \
+            --file azure/endpoint.yml \
+            --name ${{ env.STAGING_ENDPOINT }} \
+            --workspace-name ${{ env.AML_WORKSPACE }} \
+            --resource-group ${{ env.AML_RESOURCE_GROUP }}
+
+      - name: Deploy model to staging
+        run: |
+          az ml online-deployment create \
+            --file azure/deployment.yml \
+            --endpoint-name ${{ env.STAGING_ENDPOINT }} \
+            --workspace-name ${{ env.AML_WORKSPACE }} \
+            --resource-group ${{ env.AML_RESOURCE_GROUP }} \
+            --set model=azureml:${{ env.MODEL_NAME }}:${{ needs.train-and-register.outputs.model_version }} \
+            --set environment_variables.MODEL_VERSION=${{ needs.train-and-register.outputs.model_version }} \
+            --all-traffic
+
+      - name: Smoke test staging endpoint
+        run: |
+          python scripts/check_endpoint_health.py \
+            --endpoint ${{ env.STAGING_ENDPOINT }} \
+            --workspace ${{ env.AML_WORKSPACE }} \
+            --resource-group ${{ env.AML_RESOURCE_GROUP }} \
+            --subscription ${{ env.AML_SUBSCRIPTION }} \
+            --sample-request data/sample_request.json
+
+  # ---------------------------------------------------------------------------
+  # Job 4: Integration tests against staging
+  # ---------------------------------------------------------------------------
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install test dependencies
+        run: pip install requests pytest
+
+      - name: Fetch staging endpoint URI and key
+        id: endpoint
+        run: |
+          URI=$(az ml online-endpoint show \
+            --name ${{ env.STAGING_ENDPOINT }} \
+            --workspace-name ${{ env.AML_WORKSPACE }} \
+            --resource-group ${{ env.AML_RESOURCE_GROUP }} \
+            --query scoring_uri -o tsv)
+          KEY=$(az ml online-endpoint get-credentials \
+            --name ${{ env.STAGING_ENDPOINT }} \
+            --workspace-name ${{ env.AML_WORKSPACE }} \
+            --resource-group ${{ env.AML_RESOURCE_GROUP }} \
+            --query primaryKey -o tsv)
+          echo "uri=$URI" >> $GITHUB_OUTPUT
+          echo "::add-mask::$KEY"
+          echo "key=$KEY" >> $GITHUB_OUTPUT
+
+      - name: Run integration test suite
+        env:
+          ENDPOINT_URI: ${{ steps.endpoint.outputs.uri }}
+          ENDPOINT_KEY: ${{ steps.endpoint.outputs.key }}
+        run: |
+          pytest tests/integration/ \
+            --endpoint-uri=$ENDPOINT_URI \
+            --endpoint-key=$ENDPOINT_KEY \
+            -v --tb=short
+
+  # ---------------------------------------------------------------------------
+  # Job 5: Deploy to production (requires manual approval via environment gate)
+  # ---------------------------------------------------------------------------
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [train-and-register, integration-test]
+    if: github.ref == 'refs/heads/main'
+    environment: production  # Has required reviewers in GitHub settings
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Create or update production endpoint
+        run: |
+          az ml online-endpoint create \
+            --file azure/endpoint.yml \
+            --name ${{ env.PROD_ENDPOINT }} \
+            --workspace-name ${{ env.AML_WORKSPACE }} \
+            --resource-group ${{ env.AML_RESOURCE_GROUP }} \
+            --no-wait || \
+          az ml online-endpoint update \
+            --name ${{ env.PROD_ENDPOINT }} \
+            --workspace-name ${{ env.AML_WORKSPACE }} \
+            --resource-group ${{ env.AML_RESOURCE_GROUP }}
+
+      - name: Blue/green deploy to production
+        run: |
+          # Deploy new version as 'green' receiving 0% traffic initially
+          az ml online-deployment create \
+            --file azure/deployment.yml \
+            --endpoint-name ${{ env.PROD_ENDPOINT }} \
+            --name green \
+            --workspace-name ${{ env.AML_WORKSPACE }} \
+            --resource-group ${{ env.AML_RESOURCE_GROUP }} \
+            --set model=azureml:${{ env.MODEL_NAME }}:${{ needs.train-and-register.outputs.model_version }} \
+            --set instance_count=2
+
+          # Shift 100% traffic to green
+          az ml online-endpoint update \
+            --name ${{ env.PROD_ENDPOINT }} \
+            --traffic "green=100" \
+            --workspace-name ${{ env.AML_WORKSPACE }} \
+            --resource-group ${{ env.AML_RESOURCE_GROUP }}
+
+      - name: Validate production deployment
+        run: |
+          python scripts/check_endpoint_health.py \
+            --endpoint ${{ env.PROD_ENDPOINT }} \
+            --workspace ${{ env.AML_WORKSPACE }} \
+            --resource-group ${{ env.AML_RESOURCE_GROUP }} \
+            --subscription ${{ env.AML_SUBSCRIPTION }} \
+            --sample-request data/sample_request.json
+
+      - name: Retire old blue deployment
+        run: |
+          az ml online-deployment delete \
+            --endpoint-name ${{ env.PROD_ENDPOINT }} \
+            --name blue \
+            --workspace-name ${{ env.AML_WORKSPACE }} \
+            --resource-group ${{ env.AML_RESOURCE_GROUP }} \
+            --yes || echo "No previous blue deployment to remove"
+
+  # ---------------------------------------------------------------------------
+  # Job 6: Notifications — always runs, summarises pass/fail
+  # ---------------------------------------------------------------------------
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs:
+      - lint-and-test
+      - train-and-register
+      - deploy-staging
+      - integration-test
+      - deploy-production
+    if: always()
+
+    steps:
+      - name: Determine overall status
+        id: status
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
+            echo "result=failure" >> $GITHUB_OUTPUT
+            echo "color=#FF0000" >> $GITHUB_OUTPUT
+            echo "icon=:x:" >> $GITHUB_OUTPUT
+          else
+            echo "result=success" >> $GITHUB_OUTPUT
+            echo "color=#36A64F" >> $GITHUB_OUTPUT
+            echo "icon=:white_check_mark:" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "attachments": [
+                {
+                  "color": "${{ steps.status.outputs.color }}",
+                  "blocks": [
+                    {
+                      "type": "section",
+                      "text": {
+                        "type": "mrkdwn",
+                        "text": "${{ steps.status.outputs.icon }} *ML Pipeline ${{ steps.status.outputs.result }}* for `${{ github.repository }}`\n*Branch:* `${{ github.ref_name }}`  |  *Commit:* `${{ github.sha }}`\n*Triggered by:* ${{ github.actor }}"
+                      }
+                    },
+                    {
+                      "type": "actions",
+                      "elements": [
+                        {
+                          "type": "button",
+                          "text": { "type": "plain_text", "text": "View Run" },
+                          "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK

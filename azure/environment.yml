@@ -1,0 +1,50 @@
+$schema: https://azuremlschemas.azureedge.net/latest/environment.schema.json
+
+# -----------------------------------------------------------------------
+# Azure ML Environment — Wine Quality Classifier
+# -----------------------------------------------------------------------
+name: wine-quality-env
+version: 1
+description: >
+  Conda environment for training and scoring the Wine Quality Classifier.
+  Includes MLflow, scikit-learn, Azure ML SDK, and observability packages.
+
+# ---- Base Docker Image -------------------------------------------------
+image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04
+
+# ---- Conda Definition --------------------------------------------------
+conda_file:
+  name: wine-quality-env
+  channels:
+    - defaults
+    - conda-forge
+  dependencies:
+    - python=3.9
+    - pip
+    - pip:
+        # ML / data
+        - scikit-learn>=1.3
+        - pandas>=2.0
+        - numpy>=1.24
+        - joblib>=1.3
+        # MLflow tracking
+        - mlflow>=2.8
+        - azureml-mlflow
+        # Azure ML SDK
+        - azure-ai-ml>=1.11
+        - azure-identity>=1.15
+        # Observability
+        - opencensus-ext-azure>=1.1
+        - applicationinsights
+        # Utilities
+        - pyyaml>=6.0
+        # CI / quality
+        - pytest>=7.4
+        - flake8>=6.1
+        - black>=23.9
+        - isort>=5.12
+        - bandit>=1.7
+
+tags:
+  project: wine-quality-classifier
+  managed_by: github-actions

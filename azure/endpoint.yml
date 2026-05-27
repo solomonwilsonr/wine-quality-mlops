@@ -1,0 +1,20 @@
+$schema: https://azuremlschemas.azureedge.net/latest/managedOnlineEndpoint.schema.json
+
+# -----------------------------------------------------------------------
+# Azure ML Managed Online Endpoint — Wine Quality Classifier (Production)
+# -----------------------------------------------------------------------
+name: wine-quality-prod
+description: >
+  Production REST endpoint for the Wine Quality Classifier.
+  Supports blue/green traffic routing between deployment slots.
+
+auth_mode: key
+
+traffic:
+  blue: 100
+
+tags:
+  project: wine-quality-classifier
+  environment: production
+  managed_by: github-actions
+  cost_center: ml-platform

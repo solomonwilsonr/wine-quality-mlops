@@ -1,0 +1,24 @@
+# -----------------------------------------------------------------------
+# requirements.txt — Runtime dependencies for Wine Quality Classifier
+# -----------------------------------------------------------------------
+
+# ML / data
+scikit-learn>=1.3
+pandas>=2.0
+numpy>=1.24
+joblib>=1.3
+
+# MLflow experiment tracking
+mlflow>=2.8
+azureml-mlflow
+
+# Azure ML SDK v2
+azure-ai-ml>=1.11
+azure-identity>=1.15
+
+# Observability / Application Insights
+opencensus-ext-azure>=1.1
+applicationinsights
+
+# Utilities
+pyyaml>=6.0

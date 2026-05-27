@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+
+# ML artifacts (local only — Azure ML stores the real ones)
+mlruns/
+mlflow.db
+outputs/
+
+# Test artifacts
+.coverage
+coverage.xml
+.pytest_cache/
+
+# OS
+.DS_Store
