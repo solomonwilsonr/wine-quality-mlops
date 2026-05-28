@@ -38,15 +38,11 @@ def setup_logging(name: str, level: int = logging.INFO) -> logging.Logger:
             from opencensus.ext.azure.log_exporter import AzureLogHandler
 
             azure_handler = AzureLogHandler(connection_string=conn_str)
-            azure_handler.setFormatter(
-                logging.Formatter("%(message)s")
-            )
+            azure_handler.setFormatter(logging.Formatter("%(message)s"))
             logger.addHandler(azure_handler)
             logger.debug("Azure Monitor log handler attached.")
         except ImportError:
-            logger.warning(
-                "opencensus-ext-azure not installed; skipping Azure Monitor logging."
-            )
+            logger.warning("opencensus-ext-azure not installed; skipping Azure Monitor logging.")
 
     return logger
 
@@ -135,9 +131,7 @@ class FeatureEngineer(BaseEstimator, TransformerMixin):
             if poly_input_cols:
                 poly_array = self._poly.transform(X[poly_input_cols])
                 poly_names = self._poly.get_feature_names_out(poly_input_cols)
-                poly_df = pd.DataFrame(
-                    poly_array, columns=poly_names, index=X.index
-                )
+                poly_df = pd.DataFrame(poly_array, columns=poly_names, index=X.index)
                 # Drop raw source columns that are already in poly output
                 for col in poly_input_cols:
                     if col in poly_df.columns:

@@ -12,6 +12,7 @@ Tests cover:
 
 import sys
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
@@ -23,10 +24,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 import train  # noqa: E402
 from utils import FeatureEngineer  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_wine_quality_df(n: int = 50, seed: int = 0) -> pd.DataFrame:
     """
@@ -57,6 +58,7 @@ def make_wine_quality_df(n: int = 50, seed: int = 0) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Test: binary target creation
 # ---------------------------------------------------------------------------
+
 
 class TestPreprocessCreatesBinaryTarget:
     """quality >= 7 should become label 1; everything else label 0."""
@@ -91,6 +93,7 @@ class TestPreprocessCreatesBinaryTarget:
 # Test: column name cleaning
 # ---------------------------------------------------------------------------
 
+
 class TestPreprocessCleansColumnNames:
     """
     When a CSV is loaded, column names with spaces or special chars should be
@@ -123,6 +126,7 @@ class TestPreprocessCleansColumnNames:
 # ---------------------------------------------------------------------------
 # Test: build_pipeline structure
 # ---------------------------------------------------------------------------
+
 
 class TestBuildPipelineHasScalerAndClf:
     """train.build_pipeline() must produce a Pipeline with the expected steps."""
@@ -163,6 +167,7 @@ class TestBuildPipelineHasScalerAndClf:
 # ---------------------------------------------------------------------------
 # Test: load_data raises on missing file
 # ---------------------------------------------------------------------------
+
 
 class TestLoadDataRaisesOnMissingFile:
     """Passing a non-existent path must not silently fall back — raise clearly."""

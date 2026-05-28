@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def score_module():
     """
@@ -35,6 +36,7 @@ def score_module():
     gets a clean _model global.
     """
     import score
+
     importlib.reload(score)
     return score
 
@@ -84,6 +86,7 @@ def _make_payload(n: int = 1) -> str:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestRunReturnsPredictionsAndProbabilities:
     def test_predictions_key_present(self, patched_score):

@@ -20,10 +20,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import evaluate  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def write_metrics(tmp_path: Path, metrics: dict) -> str:
     path = tmp_path / "metrics.json"
@@ -40,12 +40,12 @@ GOOD_METRICS = {
 }
 
 CHAMPION_METRICS_LOW = {
-    "f1_weighted": "0.930",   # challenger is better by > 0.005
+    "f1_weighted": "0.930",  # challenger is better by > 0.005
     "accuracy": "0.928",
 }
 
 CHAMPION_METRICS_HIGH = {
-    "f1_weighted": "0.948",   # challenger 0.95 - 0.948 = 0.002 < 0.005 threshold
+    "f1_weighted": "0.948",  # challenger 0.95 - 0.948 = 0.002 < 0.005 threshold
     "accuracy": "0.947",
 }
 
@@ -54,14 +54,17 @@ CHAMPION_METRICS_HIGH = {
 # Test: no existing champion
 # ---------------------------------------------------------------------------
 
+
 class TestPassesWhenNoChampionExists:
     """When no model is registered in Azure ML the evaluation gate must pass."""
 
     def test_fetch_returns_none_when_no_models(self, mock_azure_client):
         """fetch_champion_metrics returns None when model list is empty."""
         mock_azure_client.models.list.return_value = []
-        with patch("azure.ai.ml.MLClient", return_value=mock_azure_client), \
-             patch("azure.identity.DefaultAzureCredential"):
+        with (
+            patch("azure.ai.ml.MLClient", return_value=mock_azure_client),
+            patch("azure.identity.DefaultAzureCredential"),
+        ):
             result = evaluate.fetch_champion_metrics(
                 model_name="wine-quality-classifier",
                 workspace="ws",
@@ -75,8 +78,10 @@ class TestPassesWhenNoChampionExists:
         mock_azure_client.models.list.return_value = []
         metrics_path = write_metrics(tmp_path, GOOD_METRICS)
 
-        with patch("azure.ai.ml.MLClient", return_value=mock_azure_client), \
-             patch("azure.identity.DefaultAzureCredential"):
+        with (
+            patch("azure.ai.ml.MLClient", return_value=mock_azure_client),
+            patch("azure.identity.DefaultAzureCredential"),
+        ):
             new_metrics = evaluate.load_new_metrics(metrics_path)
             champion = evaluate.fetch_champion_metrics(
                 model_name="wine-quality-classifier",
@@ -92,6 +97,7 @@ class TestPassesWhenNoChampionExists:
 # Test: challenger clearly beats champion
 # ---------------------------------------------------------------------------
 
+
 class TestPassesWhenImprovementExceedsThreshold:
     def test_improvement_above_threshold_returns_true(self, tmp_path, mock_azure_client):
         """
@@ -106,8 +112,10 @@ class TestPassesWhenImprovementExceedsThreshold:
         metrics_path = write_metrics(tmp_path, GOOD_METRICS)
         new_metrics = evaluate.load_new_metrics(metrics_path)
 
-        with patch("azure.ai.ml.MLClient", return_value=mock_azure_client), \
-             patch("azure.identity.DefaultAzureCredential"):
+        with (
+            patch("azure.ai.ml.MLClient", return_value=mock_azure_client),
+            patch("azure.identity.DefaultAzureCredential"),
+        ):
             champion = evaluate.fetch_champion_metrics(
                 model_name="wine-quality-classifier",
                 workspace="ws",
@@ -130,8 +138,10 @@ class TestPassesWhenImprovementExceedsThreshold:
         metrics_path = write_metrics(tmp_path, GOOD_METRICS)
         new_metrics = evaluate.load_new_metrics(metrics_path)
 
-        with patch("azure.ai.ml.MLClient", return_value=mock_azure_client), \
-             patch("azure.identity.DefaultAzureCredential"):
+        with (
+            patch("azure.ai.ml.MLClient", return_value=mock_azure_client),
+            patch("azure.identity.DefaultAzureCredential"),
+        ):
             champion = evaluate.fetch_champion_metrics(
                 model_name="wine-quality-classifier",
                 workspace="ws",
@@ -145,6 +155,7 @@ class TestPassesWhenImprovementExceedsThreshold:
 # ---------------------------------------------------------------------------
 # Test: challenger does not beat champion by enough
 # ---------------------------------------------------------------------------
+
 
 class TestFailsWhenNoImprovement:
     def test_below_threshold_returns_false(self, tmp_path, mock_azure_client):
@@ -160,8 +171,10 @@ class TestFailsWhenNoImprovement:
         metrics_path = write_metrics(tmp_path, GOOD_METRICS)
         new_metrics = evaluate.load_new_metrics(metrics_path)
 
-        with patch("azure.ai.ml.MLClient", return_value=mock_azure_client), \
-             patch("azure.identity.DefaultAzureCredential"):
+        with (
+            patch("azure.ai.ml.MLClient", return_value=mock_azure_client),
+            patch("azure.identity.DefaultAzureCredential"),
+        ):
             champion = evaluate.fetch_champion_metrics(
                 model_name="wine-quality-classifier",
                 workspace="ws",
@@ -185,8 +198,10 @@ class TestFailsWhenNoImprovement:
         metrics_path = write_metrics(tmp_path, GOOD_METRICS)
         new_metrics = evaluate.load_new_metrics(metrics_path)
 
-        with patch("azure.ai.ml.MLClient", return_value=mock_azure_client), \
-             patch("azure.identity.DefaultAzureCredential"):
+        with (
+            patch("azure.ai.ml.MLClient", return_value=mock_azure_client),
+            patch("azure.identity.DefaultAzureCredential"),
+        ):
             champion = evaluate.fetch_champion_metrics(
                 model_name="wine-quality-classifier",
                 workspace="ws",
@@ -211,8 +226,10 @@ class TestFailsWhenNoImprovement:
         metrics_path = write_metrics(tmp_path, worse_metrics)
         new_metrics = evaluate.load_new_metrics(metrics_path)
 
-        with patch("azure.ai.ml.MLClient", return_value=mock_azure_client), \
-             patch("azure.identity.DefaultAzureCredential"):
+        with (
+            patch("azure.ai.ml.MLClient", return_value=mock_azure_client),
+            patch("azure.identity.DefaultAzureCredential"),
+        ):
             champion = evaluate.fetch_champion_metrics(
                 model_name="wine-quality-classifier",
                 workspace="ws",

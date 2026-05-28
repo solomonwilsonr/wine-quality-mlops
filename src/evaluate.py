@@ -59,7 +59,9 @@ def load_new_metrics(metrics_path: str) -> dict:
         return json.load(fh)
 
 
-def fetch_champion_metrics(model_name: str, workspace: str, resource_group: str, subscription: str) -> dict | None:
+def fetch_champion_metrics(
+    model_name: str, workspace: str, resource_group: str, subscription: str
+) -> dict | None:
     """
     Fetch metrics from the latest champion model version in Azure ML.
 
@@ -86,7 +88,9 @@ def fetch_champion_metrics(model_name: str, workspace: str, resource_group: str,
         champion_metrics = latest.tags or {}
         logger.info(
             "Champion model: %s version %s, tags: %s",
-            model_name, latest.version, champion_metrics,
+            model_name,
+            latest.version,
+            champion_metrics,
         )
 
         # Tags are stored as strings; convert numeric ones
@@ -133,16 +137,12 @@ def evaluate(
 
     champion_score = champion_metrics.get(primary_metric)
     if champion_score is None:
-        logger.warning(
-            "Champion lacks '%s' metric — deploying conservatively.", primary_metric
-        )
+        logger.warning("Champion lacks '%s' metric — deploying conservatively.", primary_metric)
         return True
 
     logger.info("Champion model %s: %.6f", primary_metric, champion_score)
     improvement = new_score - champion_score
-    logger.info(
-        "Improvement: %.6f (threshold: %.6f)", improvement, min_improvement
-    )
+    logger.info("Improvement: %.6f (threshold: %.6f)", improvement, min_improvement)
 
     if improvement >= min_improvement:
         logger.info("New model is better — will deploy.")

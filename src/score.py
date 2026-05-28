@@ -103,12 +103,19 @@ def _validate_input(records: list[dict]) -> tuple[bool, str]:
             if feature in record:
                 val = record[feature]
                 if not isinstance(val, (int, float)):
-                    return False, f"Record {i}: feature '{feature}' must be numeric, got {type(val)}"
+                    return (
+                        False,
+                        f"Record {i}: feature '{feature}' must be numeric, got {type(val)}",
+                    )
                 if val < lo * 0.5 or val > hi * 2.0:
                     # Soft range check — warn but allow; hard outliers are blocked
                     logger.warning(
                         "Record %d: feature '%s' value %.3f is far outside expected range [%.1f, %.1f]",
-                        i, feature, val, lo, hi,
+                        i,
+                        feature,
+                        val,
+                        lo,
+                        hi,
                     )
 
     return True, ""
@@ -166,7 +173,9 @@ def run(raw_data: str) -> str:
     elapsed_ms = round((time.time() - start_time) * 1000, 2)
     logger.info(
         "Scored %d records in %.1f ms (model_version=%s)",
-        len(records), elapsed_ms, _model_version,
+        len(records),
+        elapsed_ms,
+        _model_version,
     )
 
     return json.dumps(

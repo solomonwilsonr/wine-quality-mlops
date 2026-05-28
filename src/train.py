@@ -187,9 +187,7 @@ def main():
 
         if args.n_estimators is None and args.max_depth is None:
             # Full grid search path (used in CI)
-            best_pipeline, best_params, best_cv_score = run_grid_search(
-                pipeline, X_train, y_train
-            )
+            best_pipeline, best_params, best_cv_score = run_grid_search(pipeline, X_train, y_train)
             mlflow.log_params({k.replace("classifier__", ""): v for k, v in best_params.items()})
             mlflow.log_metric("cv_f1_weighted", best_cv_score)
         else:
