@@ -12,11 +12,8 @@ Tests cover:
 
 import sys
 from pathlib import Path
-from unittest.mock import patch
-
 import numpy as np
 import pandas as pd
-import pytest
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
 

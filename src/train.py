@@ -16,7 +16,6 @@ from pathlib import Path
 
 import mlflow
 import mlflow.sklearn
-import numpy as np
 import pandas as pd
 from sklearn.datasets import load_wine
 from sklearn.ensemble import RandomForestClassifier

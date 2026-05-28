@@ -155,7 +155,6 @@ def evaluate(
         return False
 
 
-
 # Alias used by tests and scripts for a more descriptive name.
 should_deploy = evaluate
 
