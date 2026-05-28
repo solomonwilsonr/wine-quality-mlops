@@ -13,6 +13,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 import mlflow
 import mlflow.sklearn
@@ -78,7 +79,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_data(data_path: str | None) -> tuple[pd.DataFrame, pd.Series]:
+def load_data(data_path: Optional[str]) -> tuple[pd.DataFrame, pd.Series]:
     """Load wine dataset either from a CSV or the sklearn built-in."""
     if data_path and Path(data_path).exists():
         logger.info("Loading data from %s", data_path)
@@ -94,7 +95,7 @@ def load_data(data_path: str | None) -> tuple[pd.DataFrame, pd.Series]:
     return X, y
 
 
-def build_pipeline(n_estimators: int | None, max_depth: int | None) -> Pipeline:
+def build_pipeline(n_estimators: Optional[int], max_depth: Optional[int]) -> Pipeline:
     """Construct the sklearn Pipeline with feature engineering + classifier."""
     fe = FeatureEngineer(apply_polynomial=True, poly_degree=2, clip_outliers=True)
     rf = RandomForestClassifier(

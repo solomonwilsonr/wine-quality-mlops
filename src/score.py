@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import time
+from typing import Tuple
 
 import mlflow
 import numpy as np
@@ -82,7 +83,7 @@ def init():
         raise
 
 
-def _validate_input(records: list[dict]) -> tuple[bool, str]:
+def _validate_input(records: list) -> Tuple[bool, str]:
     """
     Validate incoming records against expected schema and value ranges.
 

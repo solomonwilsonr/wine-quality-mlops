@@ -12,6 +12,7 @@ import json
 import logging
 import sys
 from pathlib import Path
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -61,7 +62,7 @@ def load_new_metrics(metrics_path: str) -> dict:
 
 def fetch_champion_metrics(
     model_name: str, workspace: str, resource_group: str, subscription: str
-) -> dict | None:
+) -> Optional[dict]:
     """
     Fetch metrics from the latest champion model version in Azure ML.
 
@@ -112,7 +113,7 @@ def fetch_champion_metrics(
 
 def evaluate(
     new_metrics: dict,
-    champion_metrics: dict | None,
+    champion_metrics: Optional[dict],
     primary_metric: str,
     min_improvement: float = MIN_IMPROVEMENT,
 ) -> bool:
