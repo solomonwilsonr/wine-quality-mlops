@@ -121,17 +121,19 @@ jobs:
       - name: Submit Azure ML training job
         id: train
         run: |
-          az ml job create \
+          JOB_NAME=$(az ml job create \
             --file azure/train_job.yml \
             --workspace-name ${{ env.AML_WORKSPACE }} \
             --resource-group ${{ env.AML_RESOURCE_GROUP }} \
             --subscription ${{ env.AML_SUBSCRIPTION }} \
             --set environment_variables.GIT_SHA=${{ github.sha }} \
             --set environment_variables.RUN_ID=${{ github.run_id }} \
-            --stream \
-          | tee train_output.txt
-          JOB_NAME=$(grep -oP '(?<="name": ")[^"]+' train_output.txt | head -1)
+            --query name -o tsv)
           echo "job_name=$JOB_NAME" >> $GITHUB_OUTPUT
+          echo "Submitted job: $JOB_NAME"
+          az ml job stream --name $JOB_NAME \
+            --workspace-name ${{ env.AML_WORKSPACE }} \
+            --resource-group ${{ env.AML_RESOURCE_GROUP }}
 
       - name: Download training metrics
         run: |
